@@ -1,0 +1,35 @@
+WITH top_onds AS (
+  SELECT
+    SearchDepartureFromCity,
+    SearchDepartureToCity,
+    COUNT(*) AS total_searches
+  FROM air_searchlog_summary
+  WHERE SearchDate BETWEEN '2025-06-01' AND '2025-07-31'
+  GROUP BY
+    SearchDepartureFromCity,
+    SearchDepartureToCity
+  ORDER BY total_searches DESC
+  LIMIT 10
+)
+SELECT
+  s.SearchDepartureFromCity,
+  s.SearchDepartureToCity,
+  s.SearchDate,
+  COUNT(*) AS total_demand,
+  SUM(CASE WHEN s.IsBooked = 1 THEN 1 ELSE 0 END) AS filled_count,
+  ROUND(
+    IFNULL(SUM(CASE WHEN s.IsBooked = 1 THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(*),0), 0)
+  ,2) AS fill_rate_percent
+FROM air_searchlog_summary s
+JOIN top_onds t
+  ON s.SearchDepartureFromCity = t.SearchDepartureFromCity
+     AND s.SearchDepartureToCity = t.SearchDepartureToCity
+WHERE s.SearchDate BETWEEN '2025-06-01' AND '2025-07-31'
+GROUP BY
+  s.SearchDepartureFromCity,
+  s.SearchDepartureToCity,
+  s.SearchDate
+ORDER BY
+  s.SearchDepartureFromCity,
+  s.SearchDepartureToCity,
+  s.SearchDate;
