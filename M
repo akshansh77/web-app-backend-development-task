@@ -1,0 +1,40 @@
+import pandas as pd
+
+# CSV file padhein
+df = pd.read_csv("Top80ptileOnDsAirport.csv")
+
+# SearchDepartureDate ko date me convert karen
+df['SearchDepartureDate'] = pd.to_datetime(df['SearchDepartureDate'])
+
+# Top 10 ONDs nikal lo last 2 mahine ki range me
+mask = (df['SearchDepartureDate'] >= '2025-05-30') & (df['SearchDepartureDate'] <= '2025-07-30')
+top_onds = (
+    df.loc[mask]
+    .groupby(['SearchDepartureFromAirport', 'SearchDepartureToAirport'])
+    .agg(total_searches=('SearchCount', 'sum'))
+    .reset_index()
+    .sort_values('total_searches', ascending=False)
+    .head(10)
+)
+
+top_ond_pairs = set(zip(top_onds['SearchDepartureFromAirport'], top_onds['SearchDepartureToAirport']))
+
+# Filter sirf top ONDs pe, aur daily fill rate nikal lo
+df['ond_pair'] = list(zip(df['SearchDepartureFromAirport'], df['SearchDepartureToAirport']))
+df_top = df[mask & df['ond_pair'].isin(top_ond_pairs)]
+
+daily_fill = (
+    df_top
+    .groupby(['SearchDepartureDate', 'SearchDepartureFromAirport', 'SearchDepartureToAirport'])
+    .agg(
+        total_searches=('SearchCount', 'sum'),
+        total_bookings=('BookingCount', 'sum')
+    )
+    .reset_index()
+)
+daily_fill['fill_rate_percent'] = (daily_fill['total_bookings'] * 100) / daily_fill['total_searches']
+
+print(daily_fill)
+
+# Agar output CSV chahiye
+# daily_fill.to_csv("top10_ond_daily_fillrate.csv", index=False)
