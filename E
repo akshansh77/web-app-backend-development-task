@@ -1,0 +1,58 @@
+import pandas as pd
+from datetime import datetime, timedelta
+
+def get_exact_fill_rates(df, month, year):
+    """
+    Calculate fill rates that EXACTLY match your SQL query results
+    for every day in the specified month/year
+    """
+    # Convert all date columns to datetime if not already
+    df['SearchDate'] = pd.to_datetime(df['SearchDate']).dt.date
+    df['SearchDepartureDate'] = pd.to_datetime(df['SearchDepartureDate']).dt.date
+    
+    # Generate all days in the month
+    month_start = datetime(year, month, 1).date()
+    month_end = (month_start + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+    dates = pd.date_range(start=month_start, end=month_end).date
+    
+    results = []
+    
+    for search_date in dates:
+        # Calculate 90-day window end date
+        window_end = search_date + timedelta(days=90)
+        
+        # EXACT reproduction of your SQL query logic:
+        filtered = df[
+            (df['SearchDate'] == search_date) &
+            (df['SearchDepartureFromAirport'] == 'LAS') &
+            (df['SearchDepartureToAirport'] == 'LAX') &
+            (df['SearchDepartureDate'] >= search_date) &  # Added lower bound
+            (df['SearchDepartureDate'] <= window_end)
+        ]
+        
+        # Get unique departure dates with counts (like SQL GROUP BY)
+        date_counts = filtered.groupby('SearchDepartureDate').size()
+        unique_dates = len(date_counts)
+        
+        # Calculate fill rate
+        fill_rate = unique_dates / 90
+        
+        results.append({
+            'SearchDate': search_date.strftime('%Y-%m-%d'),
+            'WindowStart': search_date.strftime('%Y-%m-%d'),
+            'WindowEnd': window_end.strftime('%Y-%m-%d'),
+            'DaysWithSearches': unique_dates,
+            'FillRate': fill_rate,
+            'ActualSearches': date_counts.sum()  # Total search count
+        })
+    
+    return pd.DataFrame(results)
+
+# Usage:
+results = get_exact_fill_rates(testdf3, month=4, year=2025)
+print(results)
+
+# Verify April 1st matches your SQL (should show 87 days)
+april_1st = results[results['SearchDate'] == '2025-04-01']
+print("\nApril 1st result:")
+print(april_1st)
