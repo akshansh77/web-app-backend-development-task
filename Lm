@@ -1,0 +1,124 @@
+import pandas as pd
+from datetime import datetime, timedelta
+
+# 1. Define top OnDs from your official list (corrected from images)
+TOP_ONDS = [
+    ('LAS', 'LAX'),  # LAS-LAX
+    ('DEL', 'YYZ'),  # DEL-YYZ
+    ('LAX', 'MNL'),  # LAX-MNL
+    ('DEL', 'YVR'),  # DEL-YVR (corrected from VVR)
+    ('YYZ', 'DEL'),  # YYZ-DEL
+    ('SFO', 'MNL'),  # SFO-MNL
+    ('PHL', 'SJU'),  # PHL-SJU (corrected from SIU)
+    ('EWR', 'MIA'),  # EWR-MIA (corrected from EMR)
+    ('SFO', 'DEL'),  # SFO-DEL
+    ('YVR', 'DEL')   # YVR-DEL (corrected from VVR)
+]
+
+# 2. Production-grade fill rate calculator
+def calculate_fill_rates(df, month_start, month_end):
+    """Production-ready fill rate calculation with validation"""
+    # Input validation
+    required_columns = {'SearchDate', 'SearchDepartureDate', 
+                       'SearchDepartureFromAirport', 'SearchDepartureToAirport'}
+    if not required_columns.issubset(df.columns):
+        missing = required_columns - set(df.columns)
+        raise ValueError(f"Missing columns: {missing}")
+    
+    # Date conversion with error handling
+    try:
+        df['SearchDate'] = pd.to_datetime(df['SearchDate']).dt.date
+        df['SearchDepartureDate'] = pd.to_datetime(df['SearchDepartureDate']).dt.date
+    except Exception as e:
+        raise ValueError(f"Date conversion failed: {str(e)}")
+    
+    # Generate date range
+    try:
+        start_date = datetime.strptime(month_start, "%Y-%m-%d").date()
+        end_date = datetime.strptime(month_end, "%Y-%m-%d").date()
+        date_range = pd.date_range(start=start_date, end=end_date).date
+    except Exception as e:
+        raise ValueError(f"Invalid date range: {str(e)}")
+    
+    results = []
+    
+    for origin, destination in TOP_ONDS:
+        ond = f"{origin}-{destination}"
+        print(f"\nProcessing {ond}...")
+        
+        # Filter with exact matching
+        ond_mask = (
+            (df['SearchDepartureFromAirport'].str.upper() == origin.upper()) & 
+            (df['SearchDepartureToAirport'].str.upper() == destination.upper())
+        )
+        ond_df = df[ond_mask].copy()
+        
+        if ond_df.empty:
+            print(f"Warning: No data found for {ond}")
+            continue
+            
+        for search_date in date_range:
+            window_end = search_date + timedelta(days=90)
+            
+            # Exact date filtering
+            filtered = ond_df[
+                (ond_df['SearchDate'] == search_date) &
+                (ond_df['SearchDepartureDate'] >= search_date) &
+                (ond_df['SearchDepartureDate'] <= window_end)
+            ]
+            
+            # Debug info
+            debug_info = {
+                'ond': ond,
+                'search_date': search_date,
+                'total_rows': len(filtered),
+                'sample_dates': filtered['SearchDepartureDate'].head(3).tolist()
+            }
+            print(f"Debug: {debug_info}")
+            
+            unique_dates = filtered['SearchDepartureDate'].nunique()
+            fill_rate = (unique_dates / 90) * 100
+            
+            results.append({
+                'OnD': ond,
+                'SearchDate': search_date.strftime('%Y-%m-%d'),
+                'WindowStart': search_date.strftime('%Y-%m-%d'),
+                'WindowEnd': window_end.strftime('%Y-%m-%d'),
+                'DaysWithSearches': unique_dates,
+                'FillRate': fill_rate,
+                'TotalSearches': len(filtered)  # Added for verification
+            })
+    
+    return pd.DataFrame(results)
+
+# 3. Run with comprehensive validation
+try:
+    # Ensure testdf3 is loaded properly
+    if 'testdf3' not in globals():
+        raise ValueError("testdf3 not found - please load your data first")
+    
+    results = calculate_fill_rates(
+        df=testdf3,
+        month_start='2025-04-01',
+        month_end='2025-04-30'
+    )
+    
+    # Final validation
+    if results.empty:
+        raise ValueError("No results generated - check input data")
+        
+    # Check for zero-fill-rate issues
+    zero_fill = results[results['FillRate'] == 0]
+    if not zero_fill.empty:
+        print("\nWarning: Found routes with 0% fill rate:")
+        print(zero_fill[['OnD', 'SearchDate', 'TotalSearches']].to_string())
+    
+    print("\nSuccessfully calculated fill rates:")
+    print(results.to_string(index=False))
+    
+except Exception as e:
+    print(f"\nError in calculation: {str(e)}")
+    print("Please check:")
+    print("1. Your data contains the required columns")
+    print("2. Airport codes match exactly (case sensitive)")
+    print("3. Date formats are consistent (YYYY-MM-DD)")
