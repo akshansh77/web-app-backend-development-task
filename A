@@ -1,0 +1,54 @@
+from datetime import datetime, timedelta
+import pandas as pd
+
+# Step 1: Fix OnD
+selected_ond = 'LAS-LAX'
+
+# Step 2: Fix SearchDate window
+start_search_date = datetime.strptime("2025-04-01", "%Y-%m-%d").date()
+end_search_date = datetime.strptime("2025-04-30", "%Y-%m-%d").date()
+
+# Step 3: Filter for selected OnD and search date range
+ond_df = filtered_df[
+    (filtered_df['OnD'] == selected_ond) &
+    (filtered_df['SearchDate'] >= start_search_date) &
+    (filtered_df['SearchDate'] <= end_search_date)
+].copy()
+
+# Step 4: Prepare result list
+results = []
+
+# Step 5: Loop over each unique search date in that range
+for search_date in sorted(ond_df['SearchDate'].unique()):
+    
+    # Filter rows for that search date
+    search_day_df = ond_df[ond_df['SearchDate'] == search_date]
+    
+    # Define 90-day departure window
+    departure_start = search_date
+    departure_end = search_date + timedelta(days=89)
+    
+    # Filter rows within departure window
+    window_df = search_day_df[
+        (search_day_df['SearchDepartureDate'] > departure_start) &
+        (search_day_df['SearchDepartureDate'] <= departure_end)
+    ]
+    
+    # Get number of unique departure dates searched
+    unique_departure_dates = window_df['SearchDepartureDate'].nunique()
+    
+    # Calculate fill rate
+    fill_rate = unique_departure_dates / 90
+    
+    # Append result
+    results.append({
+        'SearchDate': search_date,
+        'OnD': selected_ond,
+        'FillRate': round(fill_rate, 4)
+    })
+
+# Step 6: Convert to DataFrame
+fillrate_df = pd.DataFrame(results)
+
+# Step 7: Display result
+print(fillrate_df)
