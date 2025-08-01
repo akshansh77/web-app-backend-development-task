@@ -1,0 +1,72 @@
+import pandas as pd
+from datetime import datetime, timedelta
+
+def calculate_las_lax_fill_rate(df, start_search_date, end_search_date):
+    """
+    Calculate fill rates specifically for LAS-LAX route
+    for each SearchDate between start and end dates
+    
+    Parameters:
+    df - Your DataFrame (testdf3 from earlier)
+    start_search_date - Format 'YYYY-MM-DD'
+    end_search_date - Format 'YYYY-MM-DD'
+    """
+    # Convert to datetime objects
+    start_date = datetime.strptime(start_search_date, "%Y-%m-%d").date()
+    end_date = datetime.strptime(end_search_date, "%Y-%m-%d").date()
+    
+    # Create OnD column if not exists (notice correct case 'OnD')
+    if 'OnD' not in df.columns:
+        df['OnD'] = df['SearchDepartmentFromAirport'] + '-' + df['SearchDepartmentToAirport']
+    
+    # Convert date columns if needed
+    df['SearchDate'] = pd.to_datetime(df['SearchDate']).dt.date
+    df['SearchDepartureDate'] = pd.to_datetime(df['SearchDepartureDate']).dt.date
+    
+    # Filter specifically for LAS-LAX
+    las_lax_df = df[df['OnD'] == 'LAS-LAX'].copy()
+    
+    # Generate all dates in our search range
+    date_range = pd.date_range(start=start_date, end=end_date).date
+    
+    results = []
+    
+    for search_date in date_range:
+        # Calculate 90-day window
+        window_start = search_date
+        window_end = search_date + timedelta(days=90)
+        
+        # Filter for current search date and window
+        filtered = las_lax_df[
+            (las_lax_df['SearchDate'] == search_date) &
+            (las_lax_df['SearchDepartureDate'] >= window_start) &
+            (las_lax_df['SearchDepartureDate'] <= window_end)
+        ]
+        
+        # Count unique departure dates
+        unique_dates = filtered['SearchDepartureDate'].nunique()
+        
+        # Calculate fill rate
+        fill_rate = unique_dates / 90
+        
+        results.append({
+            'Origin': 'LAS',
+            'Destination': 'LAX',
+            'SearchDate': search_date,
+            'WindowStart': window_start,
+            'WindowEnd': window_end,
+            'DaysWithSearches': unique_dates,
+            'FillRate': fill_rate
+        })
+    
+    return pd.DataFrame(results)
+
+# Example usage:
+# First ensure your testdf3 is properly loaded
+fill_rate_results = calculate_las_lax_fill_rate(
+    df=testdf3,
+    start_search_date='2025-04-01',
+    end_search_date='2025-04-30'
+)
+
+print(fill_rate_results)
