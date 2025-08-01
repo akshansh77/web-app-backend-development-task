@@ -1,0 +1,65 @@
+import pandas as pd
+from datetime import datetime, timedelta
+
+# Convert date columns to datetime.date
+testdf3['SearchDate'] = pd.to_datetime(testdf3['SearchDate']).dt.date
+testdf3['SearchDepartureDate'] = pd.to_datetime(testdf3['SearchDepartureDate']).dt.date
+
+# Define top OnDs (only LAS-LAX in this case)
+top_onds = [("LAS", "LAX")]
+
+# Define SearchDate range
+start_date = datetime.strptime("2025-05-01", "%Y-%m-%d").date()
+end_date = datetime.strptime("2025-07-31", "%Y-%m-%d").date()
+
+# Filter relevant SearchDates
+filtered_df = testdf3[
+    (testdf3['SearchDate'] == start_date)
+].copy()
+
+# Create OnD column
+filtered_df['OnD'] = filtered_df['SearchDepartureFromAirport'] + '-' + filtered_df['SearchDepartureToAirport']
+
+# Initialize results list
+results = []
+
+# Loop through each OnD and each SearchDate
+for origin, destination in top_onds:
+    ond = f"{origin}-{destination}"
+    ond_df = filtered_df[filtered_df['OnD'] == ond]
+
+    for search_date in sorted(ond_df['SearchDate'].unique()):
+        # Filter searches made on this search_date
+        search_day_df = ond_df[ond_df['SearchDate'] == search_date]
+
+        # Filter for departure dates within 90 days of search_date
+        departure_start = search_date
+        departure_end = search_date + timedelta(days=90)
+        search_day_df = search_day_df[
+            (search_day_df['SearchDepartureDate'] >= departure_start) &
+            (search_day_df['SearchDepartureDate'] <= departure_end)
+        ]
+
+        # Count number of searches per departure date
+        grouped = search_day_df.groupby('SearchDepartureDate').size().reset_index(name='SearchCount')
+        grouped['SearchDate'] = search_date
+        grouped['OnD'] = ond
+        
+        # NEW: Calculate fill rate for this search date
+        total_searches = grouped['SearchCount'].sum()
+        fill_rate = total_searches / 90
+        print(f"Fill Rate for {search_date}: {total_searches}/90 = {fill_rate:.2%}")
+        
+        results.append(grouped)
+
+# Combine all results
+final_df = pd.concat(results, ignore_index=True)[['SearchDate', 'OnD', 'SearchDepartureDate', 'SearchCount']]
+
+# Display the result
+print("\nFinal DataFrame:")
+print(final_df)
+
+# NEW: Calculate overall fill rate
+overall_total_searches = final_df['SearchCount'].sum()
+overall_fill_rate = overall_total_searches / 90
+print(f"\nOverall Fill Rate: {overall_total_searches}/90 = {overall_fill_rate:.2%}")
