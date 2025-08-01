@@ -1,0 +1,79 @@
+import pandas as pd
+from datetime import datetime, timedelta
+
+# 1. Create a DataFrame with the predefined top 10 OnDs (without loading CSV)
+top_onds_data = {
+    'OnD': ['LAS-LAX', 'DEL-YYZ', 'LAX-MNL', 'DEL-YVR', 'YYZ-DEL', 
+            'SFO-MNL', 'PHL-SJU', 'EWR-MIA', 'SFO-DEL', 'YVR-DEL'],
+    'Origin': ['LAS', 'DEL', 'LAX', 'DEL', 'YYZ', 'SFO', 'PHL', 'EWR', 'SFO', 'YVR'],
+    'Destination': ['LAX', 'YYZ', 'MNL', 'YVR', 'DEL', 'MNL', 'SJU', 'MIA', 'DEL', 'DEL']
+}
+
+top_onds_df = pd.DataFrame(top_onds_data)
+
+# 2. Extract the airport pairs as tuples
+top_onds = list(zip(top_onds_df['Origin'], top_onds_df['Destination']))
+
+# 3. Fill rate calculation function
+def calculate_fill_rates(df, month_start, month_end, top_onds):
+    start_date = datetime.strptime(month_start, "%Y-%m-%d").date()
+    end_date = datetime.strptime(month_end, "%Y-%m-%d").date()
+    date_range = pd.date_range(start=start_date, end=end_date).date
+    
+    results = []
+    
+    for origin, destination in top_onds:
+        ond = f"{origin}-{destination}"
+        print(f"Processing {ond}...")
+        
+        # Filter for this OnD
+        ond_df = df[
+            (df['SearchDepartureFromAirport'] == origin) & 
+            (df['SearchDepartureToAirport'] == destination)
+        ]
+        
+        for search_date in date_range:
+            window_end = search_date + timedelta(days=90)
+            
+            filtered = ond_df[
+                (ond_df['SearchDate'].dt.date == search_date) &
+                (ond_df['SearchDepartureDate'].dt.date >= search_date) &
+                (ond_df['SearchDepartureDate'].dt.date <= window_end)
+            ]
+            
+            unique_dates = filtered['SearchDepartureDate'].dt.date.nunique()
+            fill_rate = (unique_dates / 90) * 100
+            
+            results.append({
+                'OnD': ond,
+                'SearchDate': search_date.strftime('%Y-%m-%d'),
+                'WindowStart': search_date.strftime('%Y-%m-%d'),
+                'WindowEnd': window_end.strftime('%Y-%m-%d'),
+                'DaysWithSearches': unique_dates,
+                'FillRate': fill_rate
+            })
+    
+    return pd.DataFrame(results)
+
+# 4. Prepare main data
+testdf3['SearchDate'] = pd.to_datetime(testdf3['SearchDate'])
+testdf3['SearchDepartureDate'] = pd.to_datetime(testdf3['SearchDepartureDate'])
+
+# 5. Calculate fill rates
+results = calculate_fill_rates(
+    df=testdf3,
+    month_start='2025-04-01',
+    month_end='2025-04-30',
+    top_onds=top_onds
+)
+
+# 6. Display results
+print("\nTop 10 OnDs being analyzed:")
+print(top_onds_df[['OnD', 'Origin', 'Destination']].to_string(index=False))
+
+print("\nFill Rate Results:")
+print("-----------------")
+print(results.to_string(index=False))
+
+# Optional: Save results to CSV
+results.to_csv('fill_rates_top10_onds.csv', index=False)
