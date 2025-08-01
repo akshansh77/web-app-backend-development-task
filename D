@@ -1,0 +1,61 @@
+import pandas as pd
+from datetime import datetime, timedelta
+
+def calculate_daily_fill_rates(df, month_start, month_end):
+    """
+    Calculate daily fill rates for LAS-LAX that exactly match SQL query results
+    
+    Parameters:
+    df - Your DataFrame (testdf3)
+    month_start - First day of month (format 'YYYY-MM-DD')
+    month_end - Last day of month (format 'YYYY-MM-DD')
+    """
+    # Convert to date objects
+    start_date = datetime.strptime(month_start, "%Y-%m-%d").date()
+    end_date = datetime.strptime(month_end, "%Y-%m-%d").date()
+    
+    # Generate all dates in the month
+    date_range = pd.date_range(start=start_date, end=end_date).date
+    
+    results = []
+    
+    for search_date in date_range:
+        # Calculate 90-day window end date
+        window_end = search_date + timedelta(days=90)
+        
+        # EXACT SQL LOGIC:
+        # Filter for LAS-LAX searches on this date with departures within window
+        filtered = df[
+            (df['SearchDate'].dt.date == search_date) &
+            (df['SearchDepartureFromAirport'] == 'LAS') &
+            (df['SearchDepartureToAirport'] == 'LAX') &
+            (df['SearchDepartureDate'].dt.date <= window_end)
+        ]
+        
+        # Count unique departure dates (matches SQL GROUP BY)
+        unique_dates = filtered['SearchDepartureDate'].dt.date.nunique()
+        
+        fill_rate = unique_dates / 90
+        
+        results.append({
+            'SearchDate': search_date.strftime('%Y-%m-%d'),
+            'WindowStart': search_date.strftime('%Y-%m-%d'),
+            'WindowEnd': window_end.strftime('%Y-%m-%d'),
+            'DaysWithSearches': unique_dates,
+            'FillRate': fill_rate
+        })
+    
+    return pd.DataFrame(results)
+
+# Ensure date columns are proper datetime
+testdf3['SearchDate'] = pd.to_datetime(testdf3['SearchDate'])
+testdf3['SearchDepartureDate'] = pd.to_datetime(testdf3['SearchDepartureDate'])
+
+# Calculate for all April dates
+april_results = calculate_daily_fill_rates(
+    df=testdf3,
+    month_start='2025-04-01',
+    month_end='2025-04-30'
+)
+
+print(april_results)
