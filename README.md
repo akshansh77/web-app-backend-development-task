@@ -1,1 +1,80 @@
 # web-app-backend-development-task
+import pandas as pd
+from datetime import datetime, timedelta
+
+def calculate_fill_rates_for_date_range(df, ond, start_search_date, end_search_date):
+    """
+    Calculate fill rates for each SearchDate in a given range for a specific OnD
+    
+    Parameters:
+    df - DataFrame containing search data
+    ond - Origin-Destination pair (e.g., 'LAS-LAX')
+    start_search_date - Start of SearchDate range (format: 'YYYY-MM-DD')
+    end_search_date - End of SearchDate range (format: 'YYYY-MM-DD')
+    
+    Returns:
+    DataFrame with fill rates for each SearchDate
+    """
+    # Convert date strings to datetime.date objects
+    start_date = datetime.strptime(start_search_date, "%Y-%m-%d").date()
+    end_date = datetime.strptime(end_search_date, "%Y-%m-%d").date()
+    
+    # Create list of all SearchDates in the range
+    date_range = pd.date_range(start=start_date, end=end_date).date
+    
+    # Prepare results list
+    results = []
+    
+    # Filter for the specific OnD first to optimize performance
+    ond_df = df[df['OnD'] == ond].copy()
+    
+    for search_date in date_range:
+        # Calculate window bounds
+        departure_start = search_date
+        departure_end = search_date + timedelta(days=90)
+        
+        # Filter for this search date and departure window
+        filtered = ond_df[
+            (ond_df['SearchDate'] == search_date) &
+            (ond_df['SearchDepartureDate'] >= departure_start) &
+            (ond_df['SearchDepartureDate'] <= departure_end)
+        ]
+        
+        # Count unique departure dates with searches
+        unique_departure_dates = filtered['SearchDepartureDate'].nunique()
+        
+        # Calculate fill rate
+        fill_rate = unique_departure_dates / 90
+        
+        # Append results
+        results.append({
+            'OnD': ond,
+            'SearchDate': search_date,
+            'WindowStart': departure_start,
+            'WindowEnd': departure_end,
+            'DaysWithSearches': unique_departure_dates,
+            'FillRate': fill_rate
+        })
+    
+    # Convert results to DataFrame
+    result_df = pd.DataFrame(results)
+    
+    return result_df
+
+# Example usage:
+# Assuming testdf3 is your DataFrame and it has 'OnD' column created as 'Origin-Dest'
+# testdf3['OnD'] = testdf3['SearchDepartmentFromAirport'] + '-' + testdf3['SearchDepartmentToAirport']
+
+# Calculate fill rates for LAS-LAX from April 1 to April 30
+fill_rate_results = calculate_fill_rates_for_date_range(
+    df=testdf3,
+    ond='LAS-LAX',
+    start_search_date='2025-04-01',
+    end_search_date='2025-04-30'
+)
+
+# Display results
+print(fill_rate_results)
+
+# Optional: Save to CSV
+# fill_rate_results.to_csv('fill_rates_LAS-LAX_April2025.csv', index=False)
