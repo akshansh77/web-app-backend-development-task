@@ -1,0 +1,80 @@
+import pandas as pd
+from datetime import datetime, timedelta
+
+# 1. Load the predefined top OnDs
+top_onds_df = pd.read_csv("Top8OptileOnDsAirport.csv")
+
+# 2. Extract the airport pairs as tuples
+top_onds = list(zip(
+    top_onds_df['SearchDepartureFromAirport'],
+    top_onds_df['SearchDepartureToAirport']
+))[:10]  # Take top 10
+
+# 3. Fill rate calculation function (same as before)
+def calculate_fill_rates(df, month_start, month_end, top_onds):
+    start_date = datetime.strptime(month_start, "%Y-%m-%d").date()
+    end_date = datetime.strptime(month_end, "%Y-%m-%d").date()
+    date_range = pd.date_range(start=start_date, end=end_date).date
+    
+    results = []
+    
+    for origin, destination in top_onds:
+        ond = f"{origin}-{destination}"
+        print(f"Processing {ond}...")
+        
+        # Filter for this OnD
+        ond_df = df[
+            (df['SearchDepartureFromAirport'] == origin) & 
+            (df['SearchDepartureToAirport'] == destination)
+        ]
+        
+        for search_date in date_range:
+            window_end = search_date + timedelta(days=90)
+            
+            filtered = ond_df[
+                (ond_df['SearchDate'].dt.date == search_date) &
+                (ond_df['SearchDepartureDate'].dt.date >= search_date) &
+                (ond_df['SearchDepartureDate'].dt.date <= window_end)
+            ]
+            
+            unique_dates = filtered['SearchDepartureDate'].dt.date.nunique()
+            fill_rate = (unique_dates / 90) * 100
+            
+            results.append({
+                'OnD': ond,
+                'SearchDate': search_date.strftime('%Y-%m-%d'),
+                'WindowStart': search_date.strftime('%Y-%m-%d'),
+                'WindowEnd': window_end.strftime('%Y-%m-%d'),
+                'DaysWithSearches': unique_dates,
+                'FillRate': fill_rate
+            })
+    
+    return pd.DataFrame(results)
+
+# 4. Run the analysis
+# First ensure date columns are proper datetime
+testdf3['SearchDate'] = pd.to_datetime(testdf3['SearchDate'])
+testdf3['SearchDepartureDate'] = pd.to_datetime(testdf3['SearchDepartureDate'])
+
+# Calculate for all top OnDs in April
+results = calculate_fill_rates(
+    df=testdf3,
+    month_start='2025-04-01',
+    month_end='2025-04-30',
+    top_onds=top_onds
+)
+
+# 5. Display results
+print("\nFill Rates for Predefined Top OnDs:")
+print("-----------------------------------")
+print(results.to_string(index=False))
+
+# Pivot view for better analysis
+pivot_results = results.pivot_table(
+    index='SearchDate',
+    columns='OnD',
+    values='FillRate',
+    aggfunc='first'
+)
+print("\nPivot View:")
+print(pivot_results)
