@@ -1,0 +1,39 @@
+from transformers import pipeline
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+import os
+
+llm = pipeline("text2text-generation", model="google/flan-t5-base")
+prompt_template = (
+    "Mask all personally identifiable information (PII) by replacing it with [PII_MASKED] "
+    "and fix all grammar errors in the following text. Return only the edited text:\n"
+)
+
+class TxtFileHandler(FileSystemEventHandler):
+    def on_created(self, event):
+        if event.is_directory:
+            return
+        if event.src_path.endswith('.txt'):
+            with open(event.src_path, 'r', encoding='utf-8') as f:
+                text = f.read()
+            prompt = prompt_template + text
+            result = llm(prompt, max_length=512)
+            processed_text = result[0]['generated_text']
+            with open(event.src_path, 'w', encoding='utf-8') as f:
+                f.write(processed_text)
+            print(f"Processed: {event.src_path}")
+
+folder_to_watch = r"C:\Users\<your-username>\Desktop\Masked files"  # Replace <your-username> with actual username
+
+observer = Observer()
+event_handler = TxtFileHandler()
+observer.schedule(event_handler, folder_to_watch, recursive=False)
+observer.start()
+print(f"Watching folder: {folder_to_watch} for new .txt files...")
+
+try:
+    while True:
+        pass  # Infinite loop to keep watcher running
+except KeyboardInterrupt:
+    observer.stop()
+observer.join()
