@@ -1,0 +1,16 @@
+class TxtFileHandler(FileSystemEventHandler):
+    def process_file(self, file_path):
+        with open(file_path, 'r', encoding='utf-8') as f:
+            text = f.read()
+        processed_text = mask_pii_fix_grammar(text)
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write(processed_text)
+        print(f"Processed: {file_path}")
+
+    def on_created(self, event):
+        if not event.is_directory and event.src_path.endswith('.txt'):
+            self.process_file(event.src_path)
+
+    def on_modified(self, event):
+        if not event.is_directory and event.src_path.endswith('.txt'):
+            self.process_file(event.src_path)
